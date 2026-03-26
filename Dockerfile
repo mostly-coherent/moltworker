@@ -3,7 +3,10 @@ FROM docker.io/cloudflare/sandbox:0.7.20
 # Install Node.js 22 (required by OpenClaw)
 # The base image has Node 20, we need to replace it with Node 22
 # Using direct binary download for reliability
+<<<<<<< HEAD
 # Note: rclone is no longer needed — persistence uses Sandbox SDK backup/restore API
+=======
+>>>>>>> 9fe67fd (fix: use Node 22.22.1 (22.22.2 npm broken in container))
 ENV NODE_VERSION=22.22.1
 RUN ARCH="$(dpkg --print-architecture)" \
     && case "${ARCH}" in \
