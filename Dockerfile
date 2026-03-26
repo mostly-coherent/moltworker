@@ -24,22 +24,32 @@ RUN ARCH="$(dpkg --print-architecture)" \
 RUN npm install -g openclaw@2026.3.23-2 \
     && openclaw --version
 
-# Create OpenClaw directories
-# Legacy .clawdbot paths are kept for R2 backup migration
-RUN mkdir -p /root/.openclaw \
-    && mkdir -p /root/clawd \
-    && mkdir -p /root/clawd/skills
+# Use /home/moltbot as the home directory instead of /root.
+# The Sandbox SDK backup API only allows directories under /home, /workspace,
+# /tmp, or /var/tmp — not /root.
+ENV HOME=/home/moltbot
+RUN mkdir -p /home/moltbot/.openclaw \
+    && mkdir -p /home/moltbot/clawd \
+    && mkdir -p /home/moltbot/clawd/skills \
+    && ln -s /home/moltbot/.openclaw /root/.openclaw \
+    && ln -s /home/moltbot/clawd /root/clawd
 
 # Copy startup script
-# Build cache bust: 2026-03-25-v31-sdk-snapshots
+# Build cache bust: 2026-03-26-v32-home-dir
 COPY start-openclaw.sh /usr/local/bin/start-openclaw.sh
 RUN chmod +x /usr/local/bin/start-openclaw.sh
 
 # Copy custom skills
-COPY skills/ /root/clawd/skills/
+COPY skills/ /home/moltbot/clawd/skills/
+
+# Ensure all files are readable for mksquashfs (Sandbox SDK backup).
+# OpenClaw and other tools may create restrictive config files at runtime,
+# but we fix build-time permissions here; runtime permissions are fixed
+# before each backup via sandbox.exec("chmod -R a+rX /home/moltbot").
+RUN chmod -R a+rX /home/moltbot
 
 # Set working directory
-WORKDIR /root/clawd
+WORKDIR /home/moltbot/clawd
 
 # Expose the gateway port
 EXPOSE 18789

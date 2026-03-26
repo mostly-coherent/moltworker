@@ -141,7 +141,7 @@ app.use('*', async (c, next) => {
 
   // Restore from backup on first access (idempotent, once per Worker isolate)
   try {
-    await restoreIfNeeded(sandbox);
+    await restoreIfNeeded(sandbox, c.env.BACKUP_BUCKET);
   } catch (err) {
     console.error('[middleware] Backup restore failed:', err);
     // Continue anyway — fresh container is better than no container
@@ -276,7 +276,7 @@ app.all('*', async (c) => {
         // Wait 30s for the gateway to write initial state
         await new Promise((r) => setTimeout(r, 30_000));
         try {
-          await createSnapshot(sandbox);
+          await createSnapshot(sandbox, c.env.BACKUP_BUCKET);
         } catch (err) {
           console.error('[snapshot] Post-startup snapshot failed:', err);
         }

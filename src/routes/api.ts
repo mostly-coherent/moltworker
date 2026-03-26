@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import { createAccessMiddleware } from '../auth';
 import { ensureMoltbotGateway, findExistingMoltbotProcess, waitForProcess } from '../gateway';
-import { createSnapshot, getCachedHandle } from '../persistence';
+import { createSnapshot, getLastBackupId, clearPersistenceCache } from '../persistence';
 
 // CLI commands can take 10-15 seconds to complete due to WebSocket connection overhead
 const CLI_TIMEOUT_MS = 20000;
@@ -203,12 +203,12 @@ adminApi.get('/storage', async (c) => {
   if (!c.env.R2_SECRET_ACCESS_KEY) missing.push('R2_SECRET_ACCESS_KEY');
   if (!c.env.CLOUDFLARE_ACCOUNT_ID) missing.push('CLOUDFLARE_ACCOUNT_ID');
 
-  const handle = getCachedHandle();
+  const lastBackupId = hasCredentials ? await getLastBackupId(c.env.BACKUP_BUCKET) : null;
 
   return c.json({
     configured: hasCredentials,
     missing: missing.length > 0 ? missing : undefined,
-    lastBackupId: handle?.id ?? null,
+    lastBackupId,
     message: hasCredentials
       ? 'R2 storage is configured. Your data will persist across container restarts via SDK snapshots.'
       : 'R2 storage is not configured. Paired devices and conversations will be lost when the container restarts.',
@@ -220,7 +220,7 @@ adminApi.post('/storage/sync', async (c) => {
   const sandbox = c.get('sandbox');
 
   try {
-    const handle = await createSnapshot(sandbox);
+    const handle = await createSnapshot(sandbox, c.env.BACKUP_BUCKET);
     return c.json({
       success: true,
       message: 'Snapshot created successfully',
@@ -258,6 +258,9 @@ adminApi.post('/gateway/restart', async (c) => {
       // Wait a moment for the process to die
       await new Promise((r) => setTimeout(r, 2000));
     }
+
+    // Clear the restore flag so the next request re-restores from R2
+    clearPersistenceCache();
 
     // Start a new gateway in the background
     const bootPromise = ensureMoltbotGateway(sandbox, c.env).catch((err) => {
