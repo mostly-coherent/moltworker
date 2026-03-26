@@ -72,7 +72,10 @@ export async function restoreIfNeeded(sandbox: Sandbox, bucket: R2Bucket): Promi
  * /tmp, or /var/tmp. The Dockerfile sets HOME=/home/moltbot and symlinks
  * /root/.openclaw and /root/clawd there.
  */
-export async function createSnapshot(sandbox: Sandbox, bucket: R2Bucket): Promise<{ id: string; dir: string }> {
+export async function createSnapshot(
+  sandbox: Sandbox,
+  bucket: R2Bucket,
+): Promise<{ id: string; dir: string }> {
   // Delete previous backup objects from R2
   const previousHandle = await getStoredHandle(bucket);
   if (previousHandle) {
