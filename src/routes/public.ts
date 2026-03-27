@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
-import { MOLTBOT_PORT } from '../config';
-import { findExistingMoltbotProcess } from '../gateway';
+import { GATEWAY_PORT } from '../config';
+import { findExistingGatewayProcess, ensureGateway } from '../gateway';
 
 /**
  * Public routes - NO Cloudflare Access authentication required
@@ -15,8 +15,8 @@ const publicRoutes = new Hono<AppEnv>();
 publicRoutes.get('/sandbox-health', (c) => {
   return c.json({
     status: 'ok',
-    service: 'moltbot-sandbox',
-    gateway_port: MOLTBOT_PORT,
+    service: 'openclaw-sandbox',
+    gateway_port: GATEWAY_PORT,
   });
 });
 
@@ -35,9 +35,26 @@ publicRoutes.get('/api/status', async (c) => {
   const sandbox = c.get('sandbox');
 
   try {
-    const process = await findExistingMoltbotProcess(sandbox);
+    let process = await findExistingGatewayProcess(sandbox);
     if (!process) {
-      return c.json({ ok: false, status: 'not_running' });
+      // No gateway process found — start it synchronously.
+      // The loading page polls /api/status, so this ensures the gateway
+      // eventually starts even if the initial waitUntil from the catch-all
+      // route didn't fire (e.g., due to DO execution context limitations).
+      try {
+        await ensureGateway(sandbox, c.env);
+        process = await findExistingGatewayProcess(sandbox);
+      } catch (err: unknown) {
+        console.error('[api/status] Gateway start failed:', err);
+        return c.json({
+          ok: false,
+          status: 'start_failed',
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      if (!process) {
+        return c.json({ ok: false, status: 'not_running' });
+      }
     }
 
     // Process exists, check if it's actually responding

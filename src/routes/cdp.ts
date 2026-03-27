@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { AppEnv, MoltbotEnv } from '../types';
+import type { AppEnv, OpenClawEnv } from '../types';
 import puppeteer, { type Browser, type Page } from '@cloudflare/puppeteer';
 
 /**
@@ -203,7 +203,7 @@ cdp.get('/', async (c) => {
 /**
  * GET /json/version - CDP discovery endpoint
  *
- * Returns browser version info and WebSocket URL for Moltbot/Playwright compatibility.
+ * Returns browser version info and WebSocket URL for OpenClaw/Playwright compatibility.
  * Authentication: Pass secret as query param `?secret=<CDP_SECRET>`
  */
 cdp.get('/json/version', async (c) => {
@@ -253,7 +253,7 @@ cdp.get('/json/version', async (c) => {
 /**
  * GET /json/list - List available targets (tabs)
  *
- * Returns a list of available browser targets for Moltbot/Playwright compatibility.
+ * Returns a list of available browser targets for OpenClaw/Playwright compatibility.
  * Note: Since we create targets on-demand per WebSocket connection, this returns
  * a placeholder target that will be created when connecting.
  * Authentication: Pass secret as query param `?secret=<CDP_SECRET>`
@@ -362,7 +362,7 @@ cdp.get('/json', async (c) => {
 /**
  * Initialize a CDP session for a WebSocket connection
  */
-async function initCDPSession(ws: WebSocket, env: MoltbotEnv): Promise<void> {
+async function initCDPSession(ws: WebSocket, env: OpenClawEnv): Promise<void> {
   let session: CDPSession | null = null;
 
   try {

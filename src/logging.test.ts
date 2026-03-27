@@ -62,12 +62,12 @@ describe('redactSensitiveParams', () => {
   });
 
   it('redacts gateway_token (real world example)', () => {
-    const url = new URL('https://moltbot.workers.dev/?token=abc123def456');
+    const url = new URL('https://openclaw.workers.dev/?token=abc123def456');
     expect(redactSensitiveParams(url)).toBe('?token=%5BREDACTED%5D');
   });
 
   it('redacts CDP secret query param (issue #85 scenario)', () => {
-    const url = new URL('https://moltbot.workers.dev/cdp/json/version?secret=my-cdp-secret');
+    const url = new URL('https://openclaw.workers.dev/cdp/json/version?secret=my-cdp-secret');
     expect(redactSensitiveParams(url)).toBe('?secret=%5BREDACTED%5D');
   });
 });

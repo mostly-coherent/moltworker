@@ -1,9 +1,9 @@
 import type { Sandbox } from '@cloudflare/sandbox';
 
 /**
- * Environment bindings for the Moltbot Worker
+ * Environment bindings for the OpenClaw Worker
  */
-export interface MoltbotEnv {
+export interface OpenClawEnv {
   Sandbox: DurableObjectNamespace<Sandbox>;
   ASSETS: Fetcher; // Assets binding for admin UI static files
   BACKUP_BUCKET: R2Bucket; // R2 bucket for Sandbox SDK backup/restore
@@ -37,7 +37,7 @@ export interface MoltbotEnv {
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;
   CLOUDFLARE_ACCOUNT_ID?: string; // Cloudflare account ID for R2 presigned URLs
-  BACKUP_BUCKET_NAME?: string; // R2 bucket name (default: 'moltbot-data')
+  BACKUP_BUCKET_NAME?: string; // R2 bucket name for backup storage
   // Browser Rendering binding for CDP shim
   BROWSER?: Fetcher;
   CDP_SECRET?: string; // Shared secret for CDP endpoint authentication
@@ -56,7 +56,7 @@ export interface AccessUser {
  * Hono app environment type
  */
 export type AppEnv = {
-  Bindings: MoltbotEnv;
+  Bindings: OpenClawEnv;
   Variables: {
     sandbox: Sandbox;
     accessUser?: AccessUser;

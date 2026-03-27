@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
-import { findExistingMoltbotProcess, waitForProcess } from '../gateway';
+import { findExistingGatewayProcess, waitForProcess } from '../gateway';
 
 /**
  * Debug routes for inspecting container state
@@ -17,7 +17,7 @@ debug.get('/version', async (c) => {
     const versionProcess = await sandbox.startProcess('openclaw --version');
     await new Promise((resolve) => setTimeout(resolve, 500));
     const versionLogs = await versionProcess.getLogs();
-    const moltbotVersion = (versionLogs.stdout || versionLogs.stderr || '').trim();
+    const openclawVersion = (versionLogs.stdout || versionLogs.stderr || '').trim();
 
     // Get node version
     const nodeProcess = await sandbox.startProcess('node --version');
@@ -26,7 +26,7 @@ debug.get('/version', async (c) => {
     const nodeVersion = (nodeLogs.stdout || '').trim();
 
     return c.json({
-      moltbot_version: moltbotVersion,
+      openclaw_version: openclawVersion,
       node_version: nodeVersion,
     });
   } catch (error) {
@@ -95,15 +95,15 @@ debug.get('/processes', async (c) => {
   }
 });
 
-// GET /debug/gateway-api - Probe the moltbot gateway HTTP API
+// GET /debug/gateway-api - Probe the OpenClaw gateway HTTP API
 debug.get('/gateway-api', async (c) => {
   const sandbox = c.get('sandbox');
   const path = c.req.query('path') || '/';
-  const MOLTBOT_PORT = 18789;
+  const GATEWAY_PORT = 18789;
 
   try {
-    const url = `http://localhost:${MOLTBOT_PORT}${path}`;
-    const response = await sandbox.containerFetch(new Request(url), MOLTBOT_PORT);
+    const url = `http://localhost:${GATEWAY_PORT}${path}`;
+    const response = await sandbox.containerFetch(new Request(url), GATEWAY_PORT);
     const contentType = response.headers.get('content-type') || '';
 
     let body: string | object;
@@ -171,11 +171,11 @@ debug.get('/logs', async (c) => {
         );
       }
     } else {
-      process = await findExistingMoltbotProcess(sandbox);
+      process = await findExistingGatewayProcess(sandbox);
       if (!process) {
         return c.json({
           status: 'no_process',
-          message: 'No Moltbot process is currently running',
+          message: 'No gateway process is currently running',
           stdout: '',
           stderr: '',
         });
@@ -354,7 +354,7 @@ debug.get('/env', async (c) => {
   });
 });
 
-// GET /debug/container-config - Read the moltbot config from inside the container
+// GET /debug/container-config - Read the OpenClaw config from inside the container
 debug.get('/container-config', async (c) => {
   const sandbox = c.get('sandbox');
 

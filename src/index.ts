@@ -1,8 +1,8 @@
 /**
- * Moltbot + Cloudflare Sandbox
+ * OpenClaw + Cloudflare Sandbox
  *
- * This Worker runs Moltbot personal AI assistant in a Cloudflare Sandbox container.
- * It proxies all requests to the Moltbot Gateway's web UI and WebSocket endpoint.
+ * This Worker runs OpenClaw personal AI assistant in a Cloudflare Sandbox container.
+ * It proxies all requests to the OpenClaw Gateway's web UI and WebSocket endpoint.
  *
  * Features:
  * - Web UI (Control Dashboard + WebChat) at /
@@ -23,10 +23,10 @@
 import { Hono } from 'hono';
 import { getSandbox, Sandbox, type SandboxOptions } from '@cloudflare/sandbox';
 
-import type { AppEnv, MoltbotEnv } from './types';
-import { MOLTBOT_PORT } from './config';
+import type { AppEnv, OpenClawEnv } from './types';
+import { GATEWAY_PORT } from './config';
 import { createAccessMiddleware } from './auth';
-import { ensureMoltbotGateway, findExistingMoltbotProcess } from './gateway';
+import { ensureGateway, findExistingGatewayProcess } from './gateway';
 import { publicRoutes, api, adminUi, debug, cdp } from './routes';
 import { redactSensitiveParams } from './utils/logging';
 import { restoreIfNeeded, createSnapshot } from './persistence';
@@ -54,7 +54,7 @@ export { Sandbox };
  * Validate required environment variables.
  * Returns an array of missing variable descriptions, or empty array if all are set.
  */
-function validateRequiredEnv(env: MoltbotEnv): string[] {
+function validateRequiredEnv(env: OpenClawEnv): string[] {
   const missing: string[] = [];
   const isTestMode = env.DEV_MODE === 'true' || env.E2E_TEST_MODE === 'true';
 
@@ -103,7 +103,7 @@ function validateRequiredEnv(env: MoltbotEnv): string[] {
  *   npx wrangler secret put SANDBOX_SLEEP_AFTER
  *   # Enter: 10m (or 1h, 30m, etc.)
  */
-function buildSandboxOptions(env: MoltbotEnv): SandboxOptions {
+function buildSandboxOptions(env: OpenClawEnv): SandboxOptions {
   const sleepAfter = env.SANDBOX_SLEEP_AFTER?.toLowerCase() || 'never';
 
   // 'never' means keep the container alive indefinitely
@@ -136,12 +136,12 @@ app.use('*', async (c, next) => {
 // Middleware: Initialize sandbox and restore backup if available
 app.use('*', async (c, next) => {
   const options = buildSandboxOptions(c.env);
-  const sandbox = getSandbox(c.env.Sandbox, 'moltbot', options);
+  const sandbox = getSandbox(c.env.Sandbox, 'openclaw', options);
   c.set('sandbox', sandbox);
 
   // Restore from backup on first access (idempotent, once per Worker isolate)
   try {
-    await restoreIfNeeded(sandbox);
+    await restoreIfNeeded(sandbox, c.env.BACKUP_BUCKET);
   } catch (err) {
     console.error('[middleware] Backup restore failed:', err);
     // Continue anyway — fresh container is better than no container
@@ -233,7 +233,7 @@ app.use('/debug/*', async (c, next) => {
 app.route('/debug', debug);
 
 // =============================================================================
-// CATCH-ALL: Proxy to Moltbot gateway
+// CATCH-ALL: Proxy to OpenClaw gateway
 // =============================================================================
 
 app.all('*', async (c) => {
@@ -244,7 +244,7 @@ app.all('*', async (c) => {
   console.log('[PROXY] Handling request:', url.pathname);
 
   // Check if gateway is already running
-  const existingProcess = await findExistingMoltbotProcess(sandbox);
+  const existingProcess = await findExistingGatewayProcess(sandbox);
   const isGatewayReady = existingProcess !== null && existingProcess.status === 'running';
 
   // For browser requests (non-WebSocket, non-API), show loading page if gateway isn't ready
@@ -256,7 +256,7 @@ app.all('*', async (c) => {
 
     // Start the gateway in the background (don't await)
     c.executionCtx.waitUntil(
-      ensureMoltbotGateway(sandbox, c.env).catch((err: Error) => {
+      ensureGateway(sandbox, c.env).catch((err: Error) => {
         console.error('[PROXY] Background gateway start failed:', err);
       }),
     );
@@ -265,25 +265,11 @@ app.all('*', async (c) => {
     return c.html(loadingPageHtml);
   }
 
-  // Ensure moltbot is running (this will wait for startup)
+  // Ensure gateway is running (this will wait for startup)
   try {
-    await ensureMoltbotGateway(sandbox, c.env);
-
-    // Schedule a snapshot after gateway startup settles (non-blocking).
-    // This captures the initial config/workspace state for persistence.
-    c.executionCtx.waitUntil(
-      (async () => {
-        // Wait 30s for the gateway to write initial state
-        await new Promise((r) => setTimeout(r, 30_000));
-        try {
-          await createSnapshot(sandbox);
-        } catch (err) {
-          console.error('[snapshot] Post-startup snapshot failed:', err);
-        }
-      })(),
-    );
+    await ensureGateway(sandbox, c.env);
   } catch (error) {
-    console.error('[PROXY] Failed to start Moltbot:', error);
+    console.error('[PROXY] Failed to start gateway:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     let hint = 'Check worker logs with: wrangler tail';
@@ -295,7 +281,7 @@ app.all('*', async (c) => {
 
     return c.json(
       {
-        error: 'Moltbot gateway failed to start',
+        error: 'Gateway failed to start',
         details: errorMessage,
         hint,
       },
@@ -303,12 +289,12 @@ app.all('*', async (c) => {
     );
   }
 
-  // Proxy to Moltbot with WebSocket message interception
+  // Proxy to gateway with WebSocket message interception
   if (isWebSocketRequest) {
     const debugLogs = c.env.DEBUG_ROUTES === 'true';
     const redactedSearch = redactSensitiveParams(url);
 
-    console.log('[WS] Proxying WebSocket connection to Moltbot');
+    console.log('[WS] Proxying WebSocket connection to gateway');
     if (debugLogs) {
       console.log('[WS] URL:', url.pathname + redactedSearch);
     }
@@ -324,7 +310,7 @@ app.all('*', async (c) => {
     }
 
     // Get WebSocket connection to the container
-    const containerResponse = await sandbox.wsConnect(wsRequest, MOLTBOT_PORT);
+    const containerResponse = await sandbox.wsConnect(wsRequest, GATEWAY_PORT);
     console.log('[WS] wsConnect response status:', containerResponse.status);
 
     // Get the container-side WebSocket
@@ -453,12 +439,12 @@ app.all('*', async (c) => {
   }
 
   console.log('[HTTP] Proxying:', url.pathname + url.search);
-  const httpResponse = await sandbox.containerFetch(request, MOLTBOT_PORT);
+  const httpResponse = await sandbox.containerFetch(request, GATEWAY_PORT);
   console.log('[HTTP] Response status:', httpResponse.status);
 
   // Add debug header to verify worker handled the request
   const newHeaders = new Headers(httpResponse.headers);
-  newHeaders.set('X-Worker-Debug', 'proxy-to-moltbot');
+  newHeaders.set('X-Worker-Debug', 'proxy-to-gateway');
   newHeaders.set('X-Debug-Path', url.pathname);
 
   return new Response(httpResponse.body, {

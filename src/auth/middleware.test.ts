@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { isDevMode, isE2ETestMode, extractJWT } from './middleware';
-import type { MoltbotEnv } from '../types';
+import type { OpenClawEnv } from '../types';
 import type { Context } from 'hono';
 import type { AppEnv } from '../types';
 import { createMockEnv } from '../test-utils';
@@ -134,7 +134,7 @@ describe('createAccessMiddleware', () => {
 
   // Helper to create a mock context with full implementation
   function createFullMockContext(options: {
-    env?: Partial<MoltbotEnv>;
+    env?: Partial<OpenClawEnv>;
     jwtHeader?: string;
     cookies?: string;
   }): {

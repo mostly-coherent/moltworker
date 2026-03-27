@@ -3,9 +3,9 @@
  */
 import { vi } from 'vitest';
 import type { Sandbox, Process, ExecResult } from '@cloudflare/sandbox';
-import type { MoltbotEnv } from './types';
+import type { OpenClawEnv } from './types';
 
-export function createMockEnv(overrides: Partial<MoltbotEnv> = {}): MoltbotEnv {
+export function createMockEnv(overrides: Partial<OpenClawEnv> = {}): OpenClawEnv {
   return {
     Sandbox: {} as any,
     ASSETS: {} as any,
@@ -14,7 +14,7 @@ export function createMockEnv(overrides: Partial<MoltbotEnv> = {}): MoltbotEnv {
   };
 }
 
-export function createMockEnvWithR2(overrides: Partial<MoltbotEnv> = {}): MoltbotEnv {
+export function createMockEnvWithR2(overrides: Partial<OpenClawEnv> = {}): OpenClawEnv {
   return createMockEnv({
     R2_ACCESS_KEY_ID: 'test-key-id',
     R2_SECRET_ACCESS_KEY: 'test-secret-key',

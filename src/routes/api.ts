@@ -1,12 +1,8 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import { createAccessMiddleware } from '../auth';
-import {
-  ensureMoltbotGateway,
-  findExistingMoltbotProcess,
-  waitForProcess,
-} from '../gateway';
-import { createSnapshot, getCachedHandle } from '../persistence';
+import { ensureGateway, findExistingGatewayProcess, waitForProcess } from '../gateway';
+import { createSnapshot, getLastBackupId, clearPersistenceCache } from '../persistence';
 
 // CLI commands can take 10-15 seconds to complete due to WebSocket connection overhead
 const CLI_TIMEOUT_MS = 20000;
@@ -32,8 +28,8 @@ adminApi.get('/devices', async (c) => {
   const sandbox = c.get('sandbox');
 
   try {
-    // Ensure moltbot is running first
-    await ensureMoltbotGateway(sandbox, c.env);
+    // Ensure gateway is running first
+    await ensureGateway(sandbox, c.env);
 
     // Run OpenClaw CLI to list devices
     // Must specify --url and --token (OpenClaw v2026.2.3 requires explicit credentials with --url)
@@ -89,8 +85,8 @@ adminApi.post('/devices/:requestId/approve', async (c) => {
   }
 
   try {
-    // Ensure moltbot is running first
-    await ensureMoltbotGateway(sandbox, c.env);
+    // Ensure gateway is running first
+    await ensureGateway(sandbox, c.env);
 
     // Run OpenClaw CLI to approve the device
     const token = c.env.MOLTBOT_GATEWAY_TOKEN;
@@ -125,8 +121,8 @@ adminApi.post('/devices/approve-all', async (c) => {
   const sandbox = c.get('sandbox');
 
   try {
-    // Ensure moltbot is running first
-    await ensureMoltbotGateway(sandbox, c.env);
+    // Ensure gateway is running first
+    await ensureGateway(sandbox, c.env);
 
     // First, get the list of pending devices
     const token = c.env.MOLTBOT_GATEWAY_TOKEN;
@@ -207,12 +203,12 @@ adminApi.get('/storage', async (c) => {
   if (!c.env.R2_SECRET_ACCESS_KEY) missing.push('R2_SECRET_ACCESS_KEY');
   if (!c.env.CLOUDFLARE_ACCOUNT_ID) missing.push('CLOUDFLARE_ACCOUNT_ID');
 
-  const handle = getCachedHandle();
+  const lastBackupId = hasCredentials ? await getLastBackupId(c.env.BACKUP_BUCKET) : null;
 
   return c.json({
     configured: hasCredentials,
     missing: missing.length > 0 ? missing : undefined,
-    lastBackupId: handle?.id ?? null,
+    lastBackupId,
     message: hasCredentials
       ? 'R2 storage is configured. Your data will persist across container restarts via SDK snapshots.'
       : 'R2 storage is not configured. Paired devices and conversations will be lost when the container restarts.',
@@ -224,7 +220,7 @@ adminApi.post('/storage/sync', async (c) => {
   const sandbox = c.get('sandbox');
 
   try {
-    const handle = await createSnapshot(sandbox);
+    const handle = await createSnapshot(sandbox, c.env.BACKUP_BUCKET);
     return c.json({
       success: true,
       message: 'Snapshot created successfully',
@@ -232,7 +228,8 @@ adminApi.post('/storage/sync', async (c) => {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    const status = errorMessage.includes('not configured') || errorMessage.includes('Missing') ? 400 : 500;
+    const status =
+      errorMessage.includes('not configured') || errorMessage.includes('Missing') ? 400 : 500;
     return c.json(
       {
         success: false,
@@ -249,7 +246,7 @@ adminApi.post('/gateway/restart', async (c) => {
 
   try {
     // Find and kill the existing gateway process
-    const existingProcess = await findExistingMoltbotProcess(sandbox);
+    const existingProcess = await findExistingGatewayProcess(sandbox);
 
     if (existingProcess) {
       console.log('Killing existing gateway process:', existingProcess.id);
@@ -262,17 +259,18 @@ adminApi.post('/gateway/restart', async (c) => {
       await new Promise((r) => setTimeout(r, 2000));
     }
 
-    // Start a new gateway in the background
-    const bootPromise = ensureMoltbotGateway(sandbox, c.env).catch((err) => {
-      console.error('Gateway restart failed:', err);
-    });
-    c.executionCtx.waitUntil(bootPromise);
+    // Clear the restore flag so the next request re-restores from R2.
+    // We intentionally do NOT start the gateway here — the next incoming
+    // request will trigger restoreIfNeeded() first (in the middleware),
+    // then ensureGateway() (in the catch-all route), ensuring
+    // the FUSE overlay is mounted before the gateway writes config files.
+    clearPersistenceCache();
 
     return c.json({
       success: true,
       message: existingProcess
-        ? 'Gateway process killed, new instance starting...'
-        : 'No existing process found, starting new instance...',
+        ? 'Gateway process killed, will restart on next request'
+        : 'No existing process found, will start on next request',
       previousProcessId: existingProcess?.id,
     });
   } catch (error) {

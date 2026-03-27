@@ -1,4 +1,4 @@
-import type { MoltbotEnv } from '../types';
+import type { OpenClawEnv } from '../types';
 
 /**
  * Build environment variables to pass to the OpenClaw container process
@@ -6,7 +6,7 @@ import type { MoltbotEnv } from '../types';
  * @param env - Worker environment bindings
  * @returns Environment variables record
  */
-export function buildEnvVars(env: MoltbotEnv): Record<string, string> {
+export function buildEnvVars(env: OpenClawEnv): Record<string, string> {
   const envVars: Record<string, string> = {};
 
   // Cloudflare AI Gateway configuration (new native provider)

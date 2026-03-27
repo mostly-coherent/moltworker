@@ -1,2 +1,2 @@
-export { ensureMoltbotGateway, findExistingMoltbotProcess } from './process';
+export { ensureGateway, findExistingGatewayProcess } from './process';
 export { waitForProcess } from './utils';

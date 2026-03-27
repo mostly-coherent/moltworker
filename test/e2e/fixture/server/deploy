@@ -47,8 +47,10 @@ export CLOUDFLARE_ACCOUNT_ID="$CF_ACCOUNT_ID"
 E2E_CONFIG="$PROJECT_DIR/.wrangler-e2e-$WORKER_NAME.jsonc"
 echo "Generating e2e config: $E2E_CONFIG" >&2
 
-# Copy config and replace the name field (sed handles JSONC comments fine)
-sed 's/"name": "moltbot-sandbox"/"name": "'"$WORKER_NAME"'"/' "$PROJECT_DIR/wrangler.jsonc" > "$E2E_CONFIG"
+# Copy config, replace the worker name and R2 bucket name for this e2e run
+sed -e 's/"name": "moltbot-sandbox"/"name": "'"$WORKER_NAME"'"/' \
+    -e 's/"bucket_name": "moltbot-data"/"bucket_name": "'"$R2_BUCKET"'"/' \
+    "$PROJECT_DIR/wrangler.jsonc" > "$E2E_CONFIG"
 
 # Deploy using the e2e-specific config
 echo "Deploying worker: $WORKER_NAME to account $CLOUDFLARE_ACCOUNT_ID" >&2
@@ -68,7 +70,9 @@ echo "$CF_ACCESS_TEAM_DOMAIN" | npx wrangler secret put CF_ACCESS_TEAM_DOMAIN --
 echo "$R2_ACCESS_KEY_ID" | npx wrangler secret put R2_ACCESS_KEY_ID --name "$WORKER_NAME" >&2
 echo "$R2_SECRET_ACCESS_KEY" | npx wrangler secret put R2_SECRET_ACCESS_KEY --name "$WORKER_NAME" >&2
 echo "$R2_BUCKET" | npx wrangler secret put R2_BUCKET_NAME --name "$WORKER_NAME" >&2
+echo "$R2_BUCKET" | npx wrangler secret put BACKUP_BUCKET_NAME --name "$WORKER_NAME" >&2
 echo "$CLOUDFLARE_ACCOUNT_ID" | npx wrangler secret put CF_ACCOUNT_ID --name "$WORKER_NAME" >&2
+echo "$CLOUDFLARE_ACCOUNT_ID" | npx wrangler secret put CLOUDFLARE_ACCOUNT_ID --name "$WORKER_NAME" >&2
 
 # Set AI provider keys if available
 # Cloudflare AI Gateway (preferred)

@@ -38,7 +38,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
     # exposing secrets in process arguments visible via ps/proc.
     AUTH_ARGS=""
     if [ -n "$CLOUDFLARE_AI_GATEWAY_API_KEY" ] && [ -n "$CF_AI_GATEWAY_ACCOUNT_ID" ] && [ -n "$CF_AI_GATEWAY_GATEWAY_ID" ]; then
-        AUTH_ARGS="--auth-choice cloudflare-ai-gateway-api-key"
+        AUTH_ARGS="--auth-choice cloudflare-ai-gateway-api-key --cloudflare-ai-gateway-account-id $CF_AI_GATEWAY_ACCOUNT_ID --cloudflare-ai-gateway-gateway-id $CF_AI_GATEWAY_GATEWAY_ID"
     elif [ -n "$ANTHROPIC_API_KEY" ]; then
         AUTH_ARGS="--auth-choice apiKey"
     elif [ -n "$OPENAI_API_KEY" ]; then
@@ -92,6 +92,15 @@ if (process.env.OPENCLAW_GATEWAY_TOKEN) {
     config.gateway.auth = config.gateway.auth || {};
     config.gateway.auth.token = process.env.OPENCLAW_GATEWAY_TOKEN;
 }
+
+// Allow any origin to connect to the gateway control UI.
+// The gateway runs inside a Cloudflare Container behind the Worker, which
+// proxies requests from the public workers.dev domain. Without this,
+// openclaw >= 2026.2.26 rejects WebSocket connections because the browser's
+// origin (https://....workers.dev) doesn't match the gateway's localhost.
+// Security is handled by CF Access + gateway token auth, not origin checks.
+config.gateway.controlUi = config.gateway.controlUi || {};
+config.gateway.controlUi.allowedOrigins = ['*'];
 
 if (process.env.OPENCLAW_DEV_MODE === 'true') {
     config.gateway.controlUi = config.gateway.controlUi || {};
