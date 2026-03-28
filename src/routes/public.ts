@@ -42,6 +42,7 @@ publicRoutes.get('/api/status', async (c) => {
       // Restore from backup only when the gateway needs to start.
       // Restoring while the gateway is running would mount a FUSE overlay
       // that interferes with createBackup.
+      let restoreFailed = false;
       try {
         await Promise.race([
           restoreIfNeeded(sandbox, c.env.BACKUP_BUCKET),
@@ -50,7 +51,15 @@ publicRoutes.get('/api/status', async (c) => {
           ),
         ]);
       } catch (err) {
-        console.error('[api/status] Backup restore failed/timeout:', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[api/status] Backup restore failed/timeout:', msg);
+        // If restore timed out, DON'T start the gateway yet — the next poll
+        // will retry the restore. Starting without the overlay would lose
+        // restored files.
+        if (msg.includes('timeout')) {
+          return c.json({ ok: false, status: 'starting', error: 'Restore in progress' });
+        }
+        restoreFailed = true;
       }
 
       // No gateway process found — start it with a short timeout.

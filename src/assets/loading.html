@@ -176,16 +176,22 @@
               const probeTimer = setTimeout(() => probeCtrl.abort(), 10000);
               const probeResp = await fetch(window.location.href, {
                 signal: probeCtrl.signal,
-                headers: { 'Accept': 'text/html' },
+                headers: { Accept: 'text/html' },
               });
               clearTimeout(probeTimer);
               const probeText = await probeResp.text();
-              if (probeResp.ok && probeText.length > 100 && !probeText.includes('Starting container')) {
+              if (
+                probeResp.ok &&
+                probeText.length > 100 &&
+                !probeText.includes('Starting container')
+              ) {
                 // Proxy is serving real content — safe to reload
                 titleEl.innerHTML = '<span class="ready">Ready!</span>';
                 statusEl.textContent = 'Redirecting...';
                 document.querySelector('.spinner').style.display = 'none';
-                setTimeout(() => { window.location.reload(); }, 300);
+                setTimeout(() => {
+                  window.location.reload();
+                }, 300);
                 return;
               }
             } catch {

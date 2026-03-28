@@ -275,6 +275,7 @@ app.all('*', async (c) => {
   // Restoring on every request (including WebSocket reconnects) would mount a
   // FUSE overlay that interferes with createBackup — the SDK resets the overlay
   // on backup, wiping upper-layer writes.
+  let restoreTimedOut = false;
   if (!isGatewayReady) {
     try {
       await Promise.race([
@@ -282,7 +283,9 @@ app.all('*', async (c) => {
         new Promise((_, reject) => setTimeout(() => reject(new Error('Restore timeout')), 15_000)),
       ]);
     } catch (err) {
-      console.error('[PROXY] Backup restore failed/timeout:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[PROXY] Backup restore failed/timeout:', msg);
+      if (msg.includes('timeout')) restoreTimedOut = true;
     }
   }
 
@@ -293,12 +296,16 @@ app.all('*', async (c) => {
   if (!isGatewayReady && !isWebSocketRequest && acceptsHtml) {
     console.log('[PROXY] Gateway not ready, serving loading page');
 
-    // Start the gateway in the background (don't await)
-    c.executionCtx.waitUntil(
-      ensureGateway(sandbox, c.env).catch((err: Error) => {
-        console.error('[PROXY] Background gateway start failed:', err);
-      }),
-    );
+    // Only start the gateway if restore didn't time out — starting without
+    // the FUSE overlay would lose restored files. The loading page polls
+    // /api/status which will retry the restore.
+    if (!restoreTimedOut) {
+      c.executionCtx.waitUntil(
+        ensureGateway(sandbox, c.env).catch((err: Error) => {
+          console.error('[PROXY] Background gateway start failed:', err);
+        }),
+      );
+    }
 
     // Return the loading page immediately
     return c.html(loadingPageHtml);
